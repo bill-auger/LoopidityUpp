@@ -110,7 +110,7 @@ void JackIO::Reset()
 void JackIO::SetLoop()
 {
 	if (!IsRecording) { FrameN = 0 ; IsRecording = true ; }
-	else if (!IsPulseExist) NFrames = FrameN + ((NFramesPerPeriod - (FrameN % NFramesPerPeriod)) % NFramesPerPeriod) ;
+	else if (!IsPulseExist) { NFrames = FrameN + NFramesPerPeriod ; IsPulseExist = true ; }
 	else Loopidity::App->setStatusRecord(CurrentScene , IsAutoRecord = !IsAutoRecord) ;
 
 Vardump() ;

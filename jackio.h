@@ -9,7 +9,7 @@
 #include "Loopidity.h"
 
 // DEBUG
-#define PASSTHRU 1
+#define PASSTHRU 0
 // DEBUG end
 
 #define JACK_CLIENT_NAME "Loopidity"
