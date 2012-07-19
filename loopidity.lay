@@ -1,5 +1,5 @@
 LAYOUT(LoopidityLayout, 300, 250)
-	ITEM(Button, dv___0, SetLabel(t_("\vpressme")).LeftPosZ(4, 56).TopPosZ(5, 15))
+	ITEM(Button, btn1, SetLabel(t_("\vpressme")).LeftPosZ(4, 56).TopPosZ(5, 15))
 	ITEM(Label, dbgLabel0, LeftPosZ(2, 100).TopPosZ(23, 16))
 	ITEM(Label, dbgLabel1, LeftPosZ(2, 100).TopPosZ(39, 16))
 	ITEM(Label, dbgLabel2, LeftPosZ(2, 100).TopPosZ(54, 16))

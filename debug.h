@@ -1,4 +1,3 @@
-// this file should be included at the bottom of Loopidity.h
 
 #ifndef _DEBUG_H_
 #define _DEBUG_H_
@@ -16,7 +15,7 @@ class Debug
 		static void Dbg(const char* msgIn , int i1 , int i2) { sprintf(MsgOut , msgIn , i1 , i2) ; SetStatus() ; }
 		static void Dbg(const char* msgIn , int i1 , int i2 , int i3) { sprintf(MsgOut , msgIn , i1 , i2 , i3) ; SetStatus() ; }
 		static void Dbg(const char* msgIn , int i1 , int i2 , int i3 , int i4) { sprintf(MsgOut , msgIn , i1 , i2 , i3 , i4) ; SetStatus() ; }
-		static void SetStatus() { Loopidity::App->setStatusL(MsgOut) ; }
+		static void SetStatus() { LoopidityUpp::GetApp()->setStatusL(MsgOut) ; }
 
 	private:
 

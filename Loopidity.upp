@@ -1,16 +1,19 @@
 uses
-	CtrlLib;
+	CtrlLib,
+	SysExec;
 
 library
 	/usr/lib/i386-linux-gnu/libjack.so;
 
 file
-	Loopidity.lay,
+	loopidity.lay,
 	debug.h,
-	Loopidity.h,
-	Loopidity.cpp,
-	jackio.h,
-	jackio.cpp;
+	loopidity_upp.h,
+	loopidity_upp.cpp,
+	loopidity.h,
+	loopidity.cpp,
+	jack_io.h,
+	jack_io.cpp;
 
 mainconfig
 	"" = "GUI MT SSE2";
