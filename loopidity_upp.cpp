@@ -38,22 +38,28 @@ void LoopidityUpp::setStatusR(const char* msg) { statusR.Set(msg) ; }
 
 void LoopidityUpp::setMode()
 {
-	bool isAutoRecord = Loopidity::IsAutoRecord() ;
-	bool isRecording = Loopidity::IsRecording() ;
-	bool isPulseExist = Loopidity::IsPulseExist() ;
+	unsigned int currentSceneN = Loopidity::GetCurrentSceneN() ;
+	unsigned int nextSceneN = Loopidity::GetNextSceneN() ;
+	bool isSaveLoop = Loopidity::GetIsSaveLoop() ;
+	bool isRecording = Loopidity::GetIsRecording() ;
+	bool isPulseExist = Loopidity::GetIsPulseExist() ;
 
-	// scene indicators
-	unsigned int sceneN = Loopidity::GetSceneN() ;
-	Color activeColor = (isAutoRecord)? STATUS_COLOR_RECORDING : STATUS_COLOR_PLAYING ;
-	verseLabel.SetInk((sceneN == 0)? activeColor : STATUS_COLOR_IDLE) ;
-	chorusLabel.SetInk((sceneN == 1)? activeColor : STATUS_COLOR_IDLE) ;
-	bridgeLabel.SetInk((sceneN == 2)? activeColor : STATUS_COLOR_IDLE) ;
+	// current scene indicator
+	Color activeColor = (isSaveLoop)? STATUS_COLOR_RECORDING : STATUS_COLOR_PLAYING ;
+	verseLabel.SetInk((currentSceneN == 0)? activeColor : STATUS_COLOR_IDLE) ;
+	chorusLabel.SetInk((currentSceneN == 1)? activeColor : STATUS_COLOR_IDLE) ;
+	bridgeLabel.SetInk((currentSceneN == 2)? activeColor : STATUS_COLOR_IDLE) ;
+
+	// next scene indicator
+	verseLabel.SetFrame((nextSceneN == 0)? BlackFrame() : NullFrame()) ;
+	chorusLabel.SetFrame((nextSceneN == 1)? BlackFrame() : NullFrame()) ;
+	bridgeLabel.SetFrame((nextSceneN == 2)? BlackFrame() : NullFrame()) ;
 
 	// progress bar
 	if (isRecording && !isPulseExist) loopProgress.SetColor(STATUS_COLOR_RECORDING) ;
 	else loopProgress.SetColor(STATUS_COLOR_IDLE) ;
 
-if (DEBUG) { char dbg[256] ; sprintf(dbg , "Set mode: %d %d %d" , isAutoRecord , isRecording , isPulseExist) ; tempStatusR(dbg) ; }
+if (DEBUG) { char dbg[256] ; sprintf(dbg , "Set mode: %d %d %d" , isSaveLoop , isRecording , isPulseExist) ; tempStatusR(dbg) ; }
 }
 
 void LoopidityUpp::tempStatusR(const char* msg) { statusR.Temporary(msg) ; }
@@ -75,29 +81,18 @@ void LoopidityUpp::init()
 	out.Remove(idx , out.GetLength() - idx) ; out.Remove(0 , out.ReverseFind(' ')) ;
 	unsigned int buffersSize = DEFAULT_BUFFER_SIZE * N_SCENES / JackIO::GetFrameSize() ;
 	unsigned int availableMemory = atoi(out) ;
-	if (!availableMemory) { PromptOK(FREEMEM_FAIL_MSG	) ; exit(1) ; }
+	if (!availableMemory) { PromptOK(FREEMEM_FAIL_MSG) ; exit(1) ; }
 
 #if DEBUG
-dbgLabel0.SetText("LoopN") ;
-dbgLabel1.SetText("FrameN") ;
-dbgLabel2.SetText("NFrames") ;
-dbgLabel3.SetText("LoopPos") ;
-dbgLabel4.SetText("FrameSize") ;
-dbgLabel5.SetText("NFramesPerPeriod") ;
-dbgLabel6.SetText("PeriodSize") ;
-dbgLabel7.SetText("buff/mem") ; char dbg[256] ; sprintf(dbg , "%u/%u" , buffersSize , availableMemory) ; dbgText7 = dbg ;
-
-dbgLabel8.SetText("SceneN") ;
-dbgLabel9.SetText("IsAutoRecord") ;
-dbgLabel10.SetText("IsRecording") ;
-dbgLabel11.SetText("IsPulseExist") ;
+dbgLabel7.SetText("buff / mem") ; char dbg[256] ; sprintf(dbg , "%u / %u" , buffersSize , availableMemory) ; dbgText7 = dbg ;
+Loopidity::SetDbgLabels() ;
 #endif
 
 #if AUTOSTART
 
 	if (buffersSize < availableMemory) startLoopidity() ;
 #if STATIC_BUFFER_SIZE
-	else { PromptOK(dbg) ; exit(1) ; }
+	else if (DEBUG) { sprintf(dbg , "DEFAULT_BUFFER_SIZES too large - quitting - %u / %u" , buffersSize , availableMemory) ; PromptOK(dbg) ; exit(1) ; }
 #else
 		// TODO: do we have a 'GUI running' callback?
 	else SetTimeCallback(1000 , THISBACK(openMemoryDialog)) ;
@@ -120,14 +115,12 @@ void LoopidityUpp::LeftDown(Point p , dword d) {}
 
 bool LoopidityUpp::Key(dword key , int count)
 {
-if (DEBUG) { char dbg[256] ; sprintf(dbg , "key=%d" , key) ; tempStatusR(dbg) ; }
-
 	switch(key)
 	{
 case K_RETURN: case K_F5: exit(0) ; break ;
 
 		case K_SPACE: Loopidity::SetMode() ; break ;
-		case K_NUMPAD0: Loopidity::ToggleScene() ; break ;
+		case K_NUMPAD0: case KP0_NLON: case KP0_NLOFF: Loopidity::ToggleScene() ; break ;
 		default: return false ; return true ; // TODO: not sure what to return
 	}
 }
@@ -149,8 +142,8 @@ void LoopidityUpp::openMemoryDialog() { memDlg.RunAppModal() ; startLoopidity() 
 //PromptOK("ok");//exit(0) ;
 
 void LoopidityUpp::updateProgress()
-	{ loopProgress.Set((Loopidity::IsRecording())? Loopidity::GetLoopPos() : 0 , 1000) ; }
-
+	{ loopProgress.Set((Loopidity::GetIsRecording())? Loopidity::GetLoopPos() : 0 , 1000) ;
+Loopidity::Vardump() ; }
 
 /* main entry point */
 

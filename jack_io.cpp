@@ -16,20 +16,26 @@ jack_port_t* JackIO::OutputPort2 = 0 ;
 
 // audio data
 Scene* JackIO::CurrentScene = 0 ;
+Scene* JackIO::NextScene = 0 ;
 
 // server state
 unsigned int JackIO::NFramesPerPeriod = 0 ;
 const unsigned int JackIO::FRAME_SIZE = sizeof(jack_default_audio_sample_t) ;
 unsigned int JackIO::PeriodSize = 0 ;
 
+// recording state
+bool JackIO::IsRecording = false ;
+
 
 /* public functions */
 
 // setup
 
-int JackIO::Init()
+int JackIO::Init(Scene* currentScene)
 {
 if (! INIT_JACK) return true ;
+
+	CurrentScene = NextScene = currentScene ;
 
 	const char* client_name = JACK_CLIENT_NAME ;
 	jack_options_t options = JackNullOption ;
@@ -54,10 +60,6 @@ if (! INIT_JACK) return true ;
 	if (OutputPort1 == NULL || OutputPort2 == NULL) { DBG("no logical output ports") ; return false ; }
 	if (jack_activate(Client)) { DBG("cannot activate client") ; return false ; }
 
-#if JACKIO_HAS_BUFFERS
-	LoopBuffers1.push_back(RecordBuffer1) ; LoopBuffers2.push_back(RecordBuffer2) ;
-#endif
-
 	DBG("JACK initialized") ; return true ;
 }
 
@@ -73,8 +75,10 @@ void JackIO::Reset()
 	if (Client) { free(Client) ; Client = 0 ; }
 
 	// reset state
-	PeriodSize = NFramesPerPeriod = 0 ;
+	PeriodSize = NFramesPerPeriod = 0 ; IsRecording = false ;
 }
+
+void JackIO::StartRecording() { IsRecording = true ; }
 
 
 // getters/setters
@@ -83,7 +87,9 @@ unsigned int JackIO::GetNFrames() { return NFramesPerPeriod ; }
 
 const unsigned int JackIO::GetFrameSize() { return FRAME_SIZE ; }
 
-void JackIO::SetCurrentScene(Scene* currentScene) { CurrentScene = currentScene ; }
+Scene* JackIO::GetCurrentScene() { return CurrentScene ; }
+
+void JackIO::SetNextScene(Scene* nextScene) { NextScene = nextScene ; }
 
 
 /* private functions */
@@ -96,23 +102,7 @@ void JackIO::CalculatePeriodSize(unsigned int nFrames) { PeriodSize = FRAME_SIZE
 
 int JackIO::ProcessCallback(jack_nframes_t nFrames , void* arg)
 {
-#if LOOP_COUNTER
-	// increment sample rollover - ASSERT: (nFrames == NFramesPerPeriod)
-	if (!(CurrentScene->frameN = (CurrentScene->frameN + NFramesPerPeriod) % CurrentScene->nFrames) &&
-			CurrentScene->isRecording && CurrentScene->isAutoRecord)
-	{
-		++(CurrentScene->loopN) ;
 #if DSP
-		CurrentScene->loopBuffers1.push_back(CurrentScene->recordBuffer1 = new jack_default_audio_sample_t[CurrentScene->nFrames]()) ;
-		CurrentScene->loopBuffers2.push_back(CurrentScene->recordBuffer2 = new jack_default_audio_sample_t[CurrentScene->nFrames]()) ;
-#endif
-	}
-
-if (DEBUG) { if (!CurrentScene->frameN) DBG("NEW LOOP %d" , CurrentScene->loopN) ; if (!(CurrentScene->frameN % 65536)) Loopidity::Vardump() ; }
-#endif 
-#if ! DSP
-	return 0 ;
-#endif
 
 	jack_default_audio_sample_t* in1 = (jack_default_audio_sample_t*)jack_port_get_buffer(InputPort1 , nFrames) ;
 	jack_default_audio_sample_t* out1 = (jack_default_audio_sample_t*)jack_port_get_buffer(OutputPort1 , nFrames) ;
@@ -121,10 +111,36 @@ if (DEBUG) { if (!CurrentScene->frameN) DBG("NEW LOOP %d" , CurrentScene->loopN)
 	jack_default_audio_sample_t* currBuff1 = &CurrentScene->recordBuffer1[CurrentScene->frameN] ;
 	jack_default_audio_sample_t* currBuff2 = &CurrentScene->recordBuffer2[CurrentScene->frameN] ;
 
+#if ! PASSTHRU
+	if (!IsRecording)
+#endif
+		{ memcpy(out1 , in1 , PeriodSize) ; memcpy(out2 , in2 , PeriodSize) ; return 0 ; }
 
-#if PASSTHRU
-	// PeriodSize = sizeof(jack_default_audio_sample_t) * nFrames ;
-	memcpy(out1 , in1 , PeriodSize) ; memcpy(out2 , in2 , PeriodSize) ;
+#endif
+
+#if LOOP_COUNTER
+	// increment sample rollover - ASSERT: (nFrames == NFramesPerPeriod)
+	if (!(CurrentScene->frameN = (CurrentScene->frameN + NFramesPerPeriod) % CurrentScene->nFrames))
+	{
+		if (CurrentScene->isSaveLoop)
+		{
+#if DSP
+			// create new buffer for next loop in the CurrentScene and increment loopN
+			CurrentScene->loopBuffers1.push_back(CurrentScene->recordBuffer1 = new jack_default_audio_sample_t[CurrentScene->nFrames]()) ;
+			CurrentScene->loopBuffers2.push_back(CurrentScene->recordBuffer2 = new jack_default_audio_sample_t[CurrentScene->nFrames]()) ;
+
+#endif
+
+			++(CurrentScene->loopN) ;
+char d[255] ; sprintf(d , "NEW LOOP %d" , CurrentScene->loopN) ; LoopidityUpp::GetApp()->tempStatusR(d) ;
+		}
+
+		// switch to NextScene if necessary
+		CurrentScene = NextScene ; LoopidityUpp::GetApp()->setMode() ;
+	}
+
+#endif 
+#if ! DSP
 	return 0 ;
 #endif
 

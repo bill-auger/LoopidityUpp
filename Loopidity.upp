@@ -6,7 +6,7 @@ library
 	/usr/lib/i386-linux-gnu/libjack.so;
 
 file
-	loopidity.lay,
+	Loopidity.lay,
 	debug.h,
 	loopidity_upp.h,
 	loopidity_upp.cpp,
