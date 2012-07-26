@@ -42,6 +42,7 @@ app->dbgLabel10.SetText("PeriodSize") ;
 void Loopidity::Vardump() {
 #if DEBUG
 	char dbg[256] ; LoopidityUpp* app = LoopidityUpp::GetApp() ;
+	unsigned int sampleRate = JackIO::GetSampleRate() ;
 	sprintf(dbg , "%u" , GetCurrentSceneN()) ; app->dbgText11 = dbg ; app->dbgText102.SetText(dbg) ;
 	sprintf(dbg , "%u" , NextSceneN) ; app->dbgText12 = dbg ; app->dbgText103.SetText(dbg) ;
 	sprintf(dbg , "%u" , Scenes.GetCount()) ; app->dbgText13 = dbg ;
@@ -49,15 +50,15 @@ void Loopidity::Vardump() {
 	sprintf(dbg , "%u %%" , GetLoopPos() / 10) ; app->dbgText22 = dbg ;
 
 	sprintf(dbg , "%u" , JackIO::GetCurrentScene()->loopN) ; app->dbgText0 = dbg ;
-	sprintf(dbg , "%d" , JackIO::GetCurrentScene()->frameN) ; app->dbgText1 = dbg ;
-	sprintf(dbg , "%u (%ds)" , JackIO::GetCurrentScene()->nFrames , JackIO::GetCurrentScene()->nFrames / JackIO::GetSampleRate()) ; app->dbgText2 = dbg ;
+	sprintf(dbg , "%d (%ds)" , JackIO::GetCurrentScene()->frameN , JackIO::GetCurrentScene()->frameN / sampleRate) ; app->dbgText1 = dbg ;
+	sprintf(dbg , "%u (%ds)" , JackIO::GetCurrentScene()->nFrames , JackIO::GetCurrentScene()->nFrames / sampleRate) ; app->dbgText2 = dbg ;
 	sprintf(dbg , "%d" , JackIO::GetCurrentScene()->isSaveLoop) ; app->dbgText3 = dbg ;
 	sprintf(dbg , "%d" , JackIO::GetCurrentScene()->isPulseExist) ; app->dbgText4 = dbg ;
 
 	Scene* nextScene = Scenes.At(NextSceneN) ;
 	sprintf(dbg , "%u" , nextScene->loopN) ; app->dbgText15 = dbg ;
-	sprintf(dbg , "%d" , nextScene->frameN) ; app->dbgText16 = dbg ;
-	sprintf(dbg , "%u (%ds)" , nextScene->nFrames , nextScene->nFrames / JackIO::GetSampleRate()) ; app->dbgText17 = dbg ;
+	sprintf(dbg , "%d (%ds)" , nextScene->frameN , nextScene->frameN / sampleRate) ; app->dbgText16 = dbg ;
+	sprintf(dbg , "%u (%ds)" , nextScene->nFrames , nextScene->nFrames / sampleRate) ; app->dbgText17 = dbg ;
 	sprintf(dbg , "%d" , nextScene->isSaveLoop) ; app->dbgText18 = dbg ;
 	sprintf(dbg , "%d" , nextScene->isPulseExist) ; app->dbgText19 = dbg ;
 
@@ -98,8 +99,7 @@ if (!initBufferSize) { PromptOK("ERROR: initBufferSize size is zero") ; exit(1) 
 
 void Scene::setMode()
 {
-/*	if (!isRecording) { frameN = 0 ; isRecording = true ; }
-	else*/ if (!isPulseExist) { nFrames = frameN + JackIO::GetNFrames() ; isPulseExist = true ; }
+	if (!isPulseExist) { nFrames = frameN + JackIO::GetNFrames() ; isPulseExist = true ; }
 	else isSaveLoop = !isSaveLoop ;
 }
 

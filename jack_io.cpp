@@ -79,9 +79,24 @@ void JackIO::Reset()
 }
 
 void JackIO::StartRecording() { IsRecording = true ; }
+// TODO: CurrentScene->frameN -= NFramesPerPeriod ;
+//	will fill the first hole but
+//	will allocate a new loop and increment loopN immediately
+//	maybe ok if we leave recordBuffers void at first
+//	 and CurrentScene->loopN = -1 now
+// OR: maybe different logic for rollover
+//	(increment rollover and switch scenes at loop end after processing)
 
 
 // getters/setters
+
+jack_port_t* JackIO::GetInPort1() { return InputPort1 ; }
+
+jack_port_t* JackIO::GetInPort2() { return InputPort2 ; }
+
+jack_port_t* JackIO::GetOutPort1() { return OutputPort1 ; }
+
+jack_port_t* JackIO::GetOutPort2() { return OutputPort2 ; }
 
 unsigned int JackIO::GetNFrames() { return NFramesPerPeriod ; }
 
@@ -94,22 +109,17 @@ void JackIO::SetNextScene(Scene* nextScene) { NextScene = nextScene ; }
 
 /* private functions */
 
-// helpers
-
-void JackIO::CalculatePeriodSize(unsigned int nFrames) { PeriodSize = FRAME_SIZE * (NFramesPerPeriod = nFrames) ; }
 
 // JACK callbacks
 
 int JackIO::ProcessCallback(jack_nframes_t nFrames , void* arg)
 {
 #if DSP
-
+	// TODO: these are prolly static pointers
 	jack_default_audio_sample_t* in1 = (jack_default_audio_sample_t*)jack_port_get_buffer(InputPort1 , nFrames) ;
 	jack_default_audio_sample_t* out1 = (jack_default_audio_sample_t*)jack_port_get_buffer(OutputPort1 , nFrames) ;
 	jack_default_audio_sample_t* in2 = (jack_default_audio_sample_t*)jack_port_get_buffer(InputPort2 , nFrames) ;
 	jack_default_audio_sample_t* out2 = (jack_default_audio_sample_t*)jack_port_get_buffer(OutputPort2 , nFrames) ;
-	jack_default_audio_sample_t* currBuff1 = &CurrentScene->recordBuffer1[CurrentScene->frameN] ;
-	jack_default_audio_sample_t* currBuff2 = &CurrentScene->recordBuffer2[CurrentScene->frameN] ;
 
 #if ! PASSTHRU
 	if (!IsRecording)
@@ -144,6 +154,8 @@ char d[255] ; sprintf(d , "NEW LOOP %d" , CurrentScene->loopN) ; LoopidityUpp::G
 	return 0 ;
 #endif
 
+	jack_default_audio_sample_t* currBuff1 = &CurrentScene->recordBuffer1[CurrentScene->frameN] ;
+	jack_default_audio_sample_t* currBuff2 = &CurrentScene->recordBuffer2[CurrentScene->frameN] ;
 	for (unsigned int frameNin = 0 ; frameNin < nFrames ; ++frameNin)
 	{
 bool isMonitorInputs = true ; // TODO:
@@ -163,6 +175,7 @@ bool isMonitorInputs = true ; // TODO:
 	return 0 ;
 }
 
-int JackIO::SetBufferSizeCallback(jack_nframes_t nFrames , void* arg) { CalculatePeriodSize(nFrames) ; }
+int JackIO::SetBufferSizeCallback(jack_nframes_t nFrames , void* arg)
+	{ PeriodSize = FRAME_SIZE * (NFramesPerPeriod = nFrames) ; }
 
 void JackIO::ShutdownCallback(void* arg) { Reset() ; exit(1) ; }

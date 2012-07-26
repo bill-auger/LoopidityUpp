@@ -12,6 +12,7 @@
 // DEBUG
 #define DEBUG 1
 #define AUTOSTART 1
+#define MEMORY_CHECK 0
 #define CLICKSTART 1
 #define INIT_JACK 1
 #define LOOP_COUNTER 1
@@ -23,11 +24,13 @@
 
 
 #define JACK_CLIENT_NAME "Loopidity"
-//#define MAX_BUFFER 33554432 // 1024 * 1024 * 32 (approx 3 min / chan @ 48k)
-//#define MAX_BUFFER 16777216 // 2097152
-#define DEFAULT_BUFFER_SIZE 1048576
+//#define DEFAULT_BUFFER_SIZE 33554432 // 1024 * 1024 * 32 (approx 3 min @ 48k)
+//#define DEFAULT_BUFFER_SIZE 25165824 // 1024 * 1024 * 24 (approx 135 sec @ 48k)
+#define DEFAULT_BUFFER_SIZE 16777216 // 1024 * 1024 * 16 (approx 90 sec @ 48k)
+//#define DEFAULT_BUFFER_SIZE 1048576 // 5 sec
 #define DEFAULT_BUFFER_SIZES { DEFAULT_BUFFER_SIZE , DEFAULT_BUFFER_SIZE , DEFAULT_BUFFER_SIZE }
 #define N_SCENES 3
+#define N_INPUT_CHANNELS 2 // TODO: nyi - only used for memory check
 
 #define FREEMEM_FAIL_MSG "could not determine available memory - quitting"
 

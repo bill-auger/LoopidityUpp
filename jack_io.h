@@ -21,15 +21,14 @@ class JackIO
 		static void StartRecording() ;
 
 		// getters/setters
+		static jack_port_t* GetInPort1() ;
+		static jack_port_t* GetInPort2() ;
+		static jack_port_t* GetOutPort1() ;
+		static jack_port_t* GetOutPort2() ;
 		static unsigned int GetNFrames() ;
 		static const unsigned int GetFrameSize() ;
 		static Scene* GetCurrentScene() ;
 		static void SetNextScene(Scene* nextScene) ;
-
-// DEBUG
-static unsigned int GetPeriodSize() { return PeriodSize ; }
-static unsigned int GetSampleRate() { return (int)jack_get_sample_rate(Client) ; }
-// DEBUG
 
   private:
 
@@ -52,13 +51,16 @@ static unsigned int GetSampleRate() { return (int)jack_get_sample_rate(Client) ;
 		// recording state
 		static bool IsRecording ;
 
-		// helpers
-		static void CalculatePeriodSize(unsigned int nFrames) ;
-
 		// JACK callbacks
     static int ProcessCallback(jack_nframes_t nframes , void* arg) ;
     static int SetBufferSizeCallback(jack_nframes_t nframes , void* arg) ;
     static void ShutdownCallback(void* arg) ;
+
+// DEBUG
+public:
+static unsigned int GetPeriodSize() { return PeriodSize ; }
+static unsigned int GetSampleRate() { return (int)jack_get_sample_rate(Client) ; }
+// DEBUG
 } ;
 
 

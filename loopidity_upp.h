@@ -7,13 +7,17 @@ using namespace Upp ;
 #define LAYOUTFILE <Loopidity/Loopidity.lay>
 #include <CtrlCore/lay.h>
 
+
 #include "loopidity.h"
+#include "jack_io.h"
 
 
 #define INIT_W 600
 #define INIT_H 400
 #define STATUS_W 300
 #define GUI_UPDATE_INTERVAL 125
+#define N_PEAKS 32
+
 
 #define CONNECT_ARG "--connect"
 #define JACK_FAIL_MSG "Could not register JACK client - quitting"
@@ -69,6 +73,12 @@ class LoopidityUpp : public WithLoopidityLayout<TopWindow>
 		StatusBar status ;
 		InfoCtrl statusL , statusR ;
 
+		// sample data
+		jack_port_t* InPort1 ; jack_port_t* InPort2 ;
+		jack_port_t* OutPort1 ; jack_port_t* OutPort2 ;
+		Vector<jack_default_audio_sample_t> inPeaks1 , inPeaks2 ;
+		Vector<jack_default_audio_sample_t> outPeaks1 , outPeaks2 ;
+
 		// constants
 		static const Color STATUS_COLOR_RECORDING ;
 		static const Color STATUS_COLOR_PLAYING ;
@@ -84,7 +94,11 @@ class LoopidityUpp : public WithLoopidityLayout<TopWindow>
 
 		// callbacks
 		void openMemoryDialog() ;
-		void updateProgress() ;
+		void updateGUI() ;
+
+		// helpers
+		void updateLoopProgress() ;
+		void updateVUMeters() ;
 }	;
 
 
