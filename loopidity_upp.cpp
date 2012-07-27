@@ -92,10 +92,7 @@ Loopidity::SetDbgLabels() ;
 
 	// initialize peaks cache
 	for (unsigned int peakN = 0 ; peakN < N_PEAKS ; ++peakN)
-	{
-		inPeaks1.push_back(0.0) ; inPeaks2.push_back(0.0) ;
-		outPeaks1.push_back(0.0) ; outPeaks2.push_back(0.0) ;
-	}
+		{ inPeaks.push_back(0.0) ; outPeaks.push_back(0.0) ; }
 
 #if AUTOSTART
 #if MEMORY_CHECK
@@ -149,6 +146,8 @@ virtual void RightDown(Point, dword)
 
 // callbacks
 
+void LoopidityUpp::Paint(Draw& w) { drawScopes(w) ; }
+
 void LoopidityUpp::openMemoryDialog() { memDlg.RunAppModal() ; startLoopidity() ; }
 //memDlg.Open(this) ;
 //memDlg.Open() ;
@@ -159,6 +158,24 @@ void LoopidityUpp::updateGUI() { updateLoopProgress() ; updateVUMeters() ; }
 
 
 // helpers
+
+void LoopidityUpp::drawScopes(Draw& w)
+{
+	Rect winRect = GetSize() ; w.DrawRect(winRect , Black()) ;
+	unsigned int center = winRect.Width() / 2 ;
+	for (unsigned int peakN = 0 ; peakN < N_PEAKS ; ++peakN)
+	{
+		unsigned int inX , outX ; inX = center + N_PEAKS - peakN ; outX = center - peakN ;
+		unsigned int inY , outY ; inY = inPeaks[peakN] ; outY = outPeaks[peakN] ;
+		Color inColor , outColor ; inColor = outColor = Green() ;
+		if (inY > SCOPE_MAX * SCOPE_OPTIMAL) inColor = Yellow() ;
+		if (outY > SCOPE_MAX * SCOPE_OPTIMAL) inColor = Yellow() ;
+		if (inY > SCOPE_MAX) { inY = SCOPE_MAX ; inColor = Red() ; }
+		if (outY > SCOPE_MAX) { outY = SCOPE_MAX ; outColor = Red() ; }
+		w.DrawLine(inX , INSCOPE_Y - inY , inX , INSCOPE_Y + inY , 1 , inColor) ;
+		w.DrawLine(outX , OUTSCOPE_Y - outY , outX , OUTSCOPE_Y + outY , 1 , outColor) ;
+	}
+}
 
 void LoopidityUpp::updateLoopProgress() { loopProgress.Set(Loopidity::GetLoopPos() , 1000) ; }
 
@@ -171,36 +188,21 @@ void LoopidityUpp::updateVUMeters()
 	jack_default_audio_sample_t* inBuff2 = (jack_default_audio_sample_t*)jack_port_get_buffer(InPort2 , nFrames) ;
 	jack_default_audio_sample_t* outBuff1 = (jack_default_audio_sample_t*)jack_port_get_buffer(OutPort1 , nFrames) ;
 	jack_default_audio_sample_t* outBuff2 = (jack_default_audio_sample_t*)jack_port_get_buffer(OutPort2 , nFrames) ;
-	jack_default_audio_sample_t inHi1 , inHi2 , inPeak1 , inPeak2 ;
-	jack_default_audio_sample_t outHi1 , outHi2 , outPeak1 , outPeak2 ;	
-	inHi1 = inHi2 = inPeak1 = inPeak2 = outHi1 = outHi2 = outPeak1 = outPeak2 = 0 ;
-
+	jack_default_audio_sample_t inHi1 , inHi2 ;
+	jack_default_audio_sample_t outHi1 , outHi2 ;
+	inHi1 = inHi2 = outHi1 = outHi2 = 0 ;
 	for (unsigned int frameNin = 0 ; frameNin < nFrames ; ++frameNin)
 	{
-		// output VU meter
-		float s1 = fabs(outBuff1[frameNin]) ; float s2 = fabs(outBuff2[frameNin]) ;
-		if (s1 > outHi1) outHi1 = s1 ; if (s2 > outHi2) outHi2 = s2 ;
-		// output peaks
-		outPeaks1.Pop() ; outPeaks1.push_back(s1) ; outPeaks2.Pop() ; outPeaks2.push_back(s2) ;
-		// input VU meter
-		s1 = fabs(inBuff1[frameNin]) ; s2 = fabs(inBuff2[frameNin]) ;
-		if (s1 > inHi1) inHi1 = s1 ; if (s2 > inHi2) inHi2 = s2 ;
-		// input peaks
-		inPeaks1.Pop() ; inPeaks1.push_back(s1) ; inPeaks2.Pop() ; inPeaks2.push_back(s2) ;
+		float in1 = fabs(inBuff1[frameNin]) ; float in2 = fabs(inBuff2[frameNin]) ;
+		float out1 = fabs(outBuff1[frameNin]) ; float out2 = fabs(outBuff2[frameNin]) ;
+		if (in1 > inHi1) inHi1 = in1 ; if (in2 > inHi2) inHi2 = in2 ;
+		if (out1 > outHi1) outHi1 = out1 ; if (out2 > outHi2) outHi2 = out2 ;
 	}
-	for (unsigned int peakN = 0 ; peakN < N_PEAKS ; ++peakN)
-	{
-		// output peaks
-		float peak1 = fabs(outPeaks1[peakN]) ; float peak2 = fabs(outPeaks2[peakN]) ;
-		if (peak1 > outPeak1) outPeak1 = peak1 ; if (peak2 > outPeak2) outPeak2 = peak2 ;
-		// input peaks
-		peak1 = fabs(inPeaks1[peakN]) ; peak2 = fabs(inPeaks2[peakN]) ;
-		if (peak1 > inPeak1) inPeak1 = peak1 ; if (peak2 > inPeak2) inPeak2 = peak2 ;
-	}
-	inputProgress1.Set(inPeak1 * 10000 , 100) ; inputProgress2.Set(inPeak2 * 10000 , 100) ;
-	outputProgress1.Set(outPeak1 * 10000 , 100) ; outputProgress2.Set(outPeak2 * 10000 , 100) ;
-// TODO: static peaks display
-
+	inPeaks.Pop() ; inPeaks.Insert(0 , (inHi1 *= SCOPE_SCALE) + (inHi2 *= SCOPE_SCALE)) ;
+	outPeaks.Pop() ; outPeaks.Insert(0 , (outHi1 *= SCOPE_SCALE) + (outHi2 *= SCOPE_SCALE)) ;
+	inputProgress1.Set(inHi1 , VU_SCALE) ; inputProgress2.Set(inHi2 , VU_SCALE) ;
+	outputProgress1.Set(outHi1 , VU_SCALE) ; outputProgress2.Set(outHi2 , VU_SCALE) ;
+Refresh() ;
 Loopidity::Vardump() ;
 }
 

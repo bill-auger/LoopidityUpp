@@ -15,11 +15,16 @@ using namespace Upp ;
 #define INIT_W 600
 #define INIT_H 400
 #define STATUS_W 300
+#define INSCOPE_Y 300
+#define OUTSCOPE_Y 300
 #define GUI_UPDATE_INTERVAL 125
-#define N_PEAKS 32
+#define N_PEAKS 1000 / GUI_UPDATE_INTERVAL * 10
+#define SCOPE_MAX 100
+#define SCOPE_OPTIMAL 0.8
+#define SCOPE_SCALE 100
+#define VU_SCALE 100
 
-
-#define CONNECT_ARG "--connect"
+// # define CONNECT_ARG "--connect"
 #define JACK_FAIL_MSG "Could not register JACK client - quitting"
 
 
@@ -76,8 +81,8 @@ class LoopidityUpp : public WithLoopidityLayout<TopWindow>
 		// sample data
 		jack_port_t* InPort1 ; jack_port_t* InPort2 ;
 		jack_port_t* OutPort1 ; jack_port_t* OutPort2 ;
-		Vector<jack_default_audio_sample_t> inPeaks1 , inPeaks2 ;
-		Vector<jack_default_audio_sample_t> outPeaks1 , outPeaks2 ;
+		Vector<jack_default_audio_sample_t> inPeaks ;
+		Vector<jack_default_audio_sample_t> outPeaks ;
 
 		// constants
 		static const Color STATUS_COLOR_RECORDING ;
@@ -93,10 +98,12 @@ class LoopidityUpp : public WithLoopidityLayout<TopWindow>
 		void LeftDown(Point p , dword d) ;
 
 		// callbacks
+		void Paint(Draw& w) ;
 		void openMemoryDialog() ;
 		void updateGUI() ;
 
 		// helpers
+		void drawScopes(Draw& w) ;
 		void updateLoopProgress() ;
 		void updateVUMeters() ;
 }	;
