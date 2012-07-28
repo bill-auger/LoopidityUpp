@@ -17,22 +17,23 @@ using namespace Upp ;
 #define STATUS_W 300
 #define INSCOPE_Y 300
 #define OUTSCOPE_Y 300
-#define GUI_UPDATE_INTERVAL 125
-#define N_PEAKS 1000 / GUI_UPDATE_INTERVAL * 10
+#define GUI_UPDATE_INTERVAL_SHORT 125
+#define GUI_UPDATE_INTERVAL_LONG 1000
+#define N_PEAKS 1000 / GUI_UPDATE_INTERVAL_SHORT * 10
 #define SCOPE_MAX 100
 #define SCOPE_OPTIMAL 0.8
 #define SCOPE_SCALE 100
 #define VU_SCALE 100
 
-// # define CONNECT_ARG "--connect"
+//#define CONNECT_ARG "--connect"
+#define MONITOR_ARG "--nomon"
 #define JACK_FAIL_MSG "Could not register JACK client - quitting"
 
 
 struct MemoryDialog : public TopWindow
 {
 /* TODO: user defined buffer sizes
-	unsigned int bufferSizes[N_SCENES] = { 1,2,3 } ;
-	Loopidity::SetBufferSizes(bufferSizes) ;
+	startLoopidity(unsigned int initBufferSize) ; }
 */
 	Button okBtn ;
 
@@ -65,10 +66,10 @@ class LoopidityUpp : public WithLoopidityLayout<TopWindow>
 		void resetGUI() ;
 
 		// getters/setters
+		void tempStatusL(const char* msg) ;
 		void setStatusL(const char* msg) ;
 		void setStatusR(const char* msg) ;
 		void setMode() ;
-		void tempStatusR(const char* msg) ;
 
 	private:
 
@@ -91,7 +92,7 @@ class LoopidityUpp : public WithLoopidityLayout<TopWindow>
 
 		// setup
 		void init() ;
-		void startLoopidity() ;
+		void startLoopidity(unsigned int initBufferSize) ;
 
 		// event handlers
 		bool Key(dword key , int count) ;
@@ -100,9 +101,13 @@ class LoopidityUpp : public WithLoopidityLayout<TopWindow>
 		// callbacks
 		void Paint(Draw& w) ;
 		void openMemoryDialog() ;
-		void updateGUI() ;
+		void updateGUIFast() ;
+		void updateGUISlow() ;
 
 		// helpers
+		String makeTime(unsigned int seconds) ;
+		unsigned int getAvailableMemory() ;
+		void updateMemory() ;
 		void drawScopes(Draw& w) ;
 		void updateLoopProgress() ;
 		void updateVUMeters() ;

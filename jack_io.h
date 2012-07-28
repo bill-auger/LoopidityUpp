@@ -16,9 +16,8 @@ class JackIO
   public:
 
 		// setup
-    static int Init(Scene* currentScene) ;
-		static void Reset() ;
-		static void StartRecording() ;
+    static bool Init(unsigned int nFrames , Scene* currentScene) ;
+		static void Reset(Scene* currentScene) ;
 
 		// getters/setters
 		static jack_port_t* GetInPort1() ;
@@ -42,14 +41,16 @@ class JackIO
 		// audio data
 		static Scene* CurrentScene ;
 		static Scene* NextScene ;
+		static jack_default_audio_sample_t* RecordBuffer1 ;
+		static jack_default_audio_sample_t* RecordBuffer2 ;
 
 		// server state
 		static unsigned int NFramesPerPeriod ;
 		static const unsigned int FRAME_SIZE ;
 		static unsigned int PeriodSize ;
 
-		// recording state
-		static bool IsRecording ;
+		// misc flags
+		static bool IsMonitorInputs ;
 
 		// JACK callbacks
     static int ProcessCallback(jack_nframes_t nframes , void* arg) ;

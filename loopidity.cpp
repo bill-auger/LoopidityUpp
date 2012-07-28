@@ -49,14 +49,14 @@ void Loopidity::Vardump() {
 	sprintf(dbg , "%d" , IsRecording) ; app->dbgText14 = dbg ;
 	sprintf(dbg , "%u %%" , GetLoopPos() / 10) ; app->dbgText22 = dbg ;
 
-	sprintf(dbg , "%u" , JackIO::GetCurrentScene()->loopN) ; app->dbgText0 = dbg ;
+	sprintf(dbg , "%u" , JackIO::GetCurrentScene()->nLoops) ; app->dbgText0 = dbg ;
 	sprintf(dbg , "%d (%ds)" , JackIO::GetCurrentScene()->frameN , JackIO::GetCurrentScene()->frameN / sampleRate) ; app->dbgText1 = dbg ;
 	sprintf(dbg , "%u (%ds)" , JackIO::GetCurrentScene()->nFrames , JackIO::GetCurrentScene()->nFrames / sampleRate) ; app->dbgText2 = dbg ;
 	sprintf(dbg , "%d" , JackIO::GetCurrentScene()->isSaveLoop) ; app->dbgText3 = dbg ;
 	sprintf(dbg , "%d" , JackIO::GetCurrentScene()->isPulseExist) ; app->dbgText4 = dbg ;
 
 	Scene* nextScene = Scenes.At(NextSceneN) ;
-	sprintf(dbg , "%u" , nextScene->loopN) ; app->dbgText15 = dbg ;
+	sprintf(dbg , "%u" , nextScene->nLoops) ; app->dbgText15 = dbg ;
 	sprintf(dbg , "%d (%ds)" , nextScene->frameN , nextScene->frameN / sampleRate) ; app->dbgText16 = dbg ;
 	sprintf(dbg , "%u (%ds)" , nextScene->nFrames , nextScene->nFrames / sampleRate) ; app->dbgText17 = dbg ;
 	sprintf(dbg , "%d" , nextScene->isSaveLoop) ; app->dbgText18 = dbg ;
@@ -76,22 +76,22 @@ bool Loopidity::IsRecording = false ;
 unsigned int Loopidity::NextSceneN = 0 ;
 
 // audio data
-unsigned int Loopidity::InitBufferSizes[N_SCENES] = DEFAULT_BUFFER_SIZES ;
 Vector<Scene*> Loopidity::Scenes ;
 
 
 /* Scene Class public functions */
 
-Scene::Scene(unsigned int initBufferSize) :
+Scene::Scene(unsigned int nframes) :
 		// buffer iteration
-		frameN(0) , loopN(0) , nFrames(initBufferSize / JackIO::GetFrameSize()) ,
+		nFrames(nframes) , frameN(0) , nLoops(0) ,
 		// recording state
-		isSaveLoop(true) , isPulseExist(false)
-{
-if (!initBufferSize) { PromptOK("ERROR: initBufferSize size is zero") ; exit(1) ; }
+		isSaveLoop(true) , isPulseExist(false) { }
 
-	loopBuffers1.push_back(recordBuffer1 = new jack_default_audio_sample_t[initBufferSize]()) ;
-	loopBuffers2.push_back(recordBuffer2 = new jack_default_audio_sample_t[initBufferSize]()) ;
+void Scene::reset()
+{
+	frameN = nLoops = 0 ; isSaveLoop = true ; isPulseExist = false ;
+	for (unsigned int i = 1 ; i < loopBuffers1.GetCount() ; ++i)
+		delete loopBuffers1.Pop() ; delete loopBuffers2.Pop() ;
 }
 
 
@@ -113,11 +113,13 @@ unsigned int Scene::getLoopPos() { return (frameN * 1000) / nFrames ; }
 
 // user actions
 
-int Loopidity::Init()
+bool Loopidity::Init(unsigned int recordBufferSize)
 {
-	for (unsigned int sceneN = 0 ; sceneN < N_SCENES ; ++sceneN)
-		Scenes.push_back(new Scene(InitBufferSizes[sceneN])) ;
-	return JackIO::Init(Scenes.At(0)) ;
+	if (!recordBufferSize) { PromptOK("ERROR: initBufferSize size is zero") ; return false ; }
+
+	unsigned int nframes = recordBufferSize / JackIO::GetFrameSize() ;
+	unsigned int sceneN = N_SCENES ; while (sceneN--) Scenes.Add(new Scene(nframes)) ;
+	return JackIO::Init(nframes , Scenes[0]) ;
 }
 
 void Loopidity::ToggleScene()
@@ -128,23 +130,15 @@ void Loopidity::ToggleScene()
 
 void Loopidity::SetMode()
 {
-	if (!IsRecording) { JackIO::StartRecording() ; IsRecording = true ; }
+	if (!IsRecording) IsRecording = true ;
 	else JackIO::GetCurrentScene()->setMode() ;
 	LoopidityUpp::GetApp()->setMode() ;
+
+if (DEBUG) { char dbg[256] ; sprintf(dbg , "Set mode: IsRecording:%d isPulseExist:%d isSaveLoop:%d" , IsRecording , GetIsPulseExist() , GetIsSaveLoop()) ; LoopidityUpp::GetApp()->tempStatusL(dbg) ; }
 }
 
 
 // getters/setters
-
-int Loopidity::SetBufferSizes(unsigned int* initBufferSizes)
-{
-if (DEBUG) { char dbg[256] ; sprintf(dbg , "InitBufferSizes in=%d %d %d" , InitBufferSizes[0] , InitBufferSizes[1] , InitBufferSizes[2]) ; PromptOK(dbg) ; }
-if (DEBUG) { char dbg[256] ; sprintf(dbg , "initBufferSizes=%d %d %d" , initBufferSizes[0] , initBufferSizes[1] , initBufferSizes[2]) ; PromptOK(dbg) ; }
-
-	memcpy(InitBufferSizes , initBufferSizes , N_SCENES * sizeof(unsigned int) ) ;
-
-if (DEBUG) { char dbg[256] ; sprintf(dbg , "InitBufferSizes out=%d %d %d" , InitBufferSizes[0] , InitBufferSizes[1] , InitBufferSizes[2]) ; PromptOK(dbg) ; }
-}
 
 unsigned int Loopidity::GetCurrentSceneN()
 { // TODO: the U++ way - class Index has a Find() method but i couldnt get it to work
@@ -169,7 +163,6 @@ bool Loopidity::GetIsPulseExist() { return JackIO::GetCurrentScene()->isPulseExi
 
 void Loopidity::Reset()
 {
-	for (unsigned int i = 0 ; i < N_SCENES ; ++i) delete Scenes.Pop() ;
-	NextSceneN = 0 ;
-	LoopidityUpp::GetApp()->resetGUI() ; JackIO::Reset() ; Init() ;
+	NextSceneN = 0 ; unsigned int n = N_SCENES ; while (n--) Scenes[n]->reset() ;
+	LoopidityUpp::GetApp()->resetGUI() ; JackIO::Reset(Scenes[0]) ;
 }

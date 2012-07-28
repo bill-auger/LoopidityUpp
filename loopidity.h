@@ -11,9 +11,8 @@
 
 // DEBUG
 #define DEBUG 1
-#define AUTOSTART 1
-#define MEMORY_CHECK 0
-#define CLICKSTART 1
+#define MEMORY_CHECK 1 // if 0 choose DEFAULT_BUFFER_SIZE wisely
+#define INIT_LOOPIDITY 1
 #define INIT_JACK 1
 #define LOOP_COUNTER 1
 #define DSP 1
@@ -24,18 +23,19 @@
 
 
 #define JACK_CLIENT_NAME "Loopidity"
-//#define DEFAULT_BUFFER_SIZE 33554432 // 1024 * 1024 * 32 (approx 3 min @ 48k)
+//#define DEFAULT_BUFFER_SIZE 33554432 // 2^25 (approx 3 min @ 48k)
 //#define DEFAULT_BUFFER_SIZE 25165824 // 1024 * 1024 * 24 (approx 135 sec @ 48k)
-#define DEFAULT_BUFFER_SIZE 16777216 // 1024 * 1024 * 16 (approx 90 sec @ 48k)
-//#define DEFAULT_BUFFER_SIZE 1048576 // 5 sec
-#define DEFAULT_BUFFER_SIZES { DEFAULT_BUFFER_SIZE , DEFAULT_BUFFER_SIZE , DEFAULT_BUFFER_SIZE }
+//#define DEFAULT_BUFFER_SIZE 16777216 // 2^24 (approx 90 sec @ 48k)
+#define DEFAULT_BUFFER_SIZE 8388608 // 2^23 (approx 45 sec @ 48k)
+//#define DEFAULT_BUFFER_SIZE 2097152 // 2^21 (approx 10 sec @ 48k)
+//#define DEFAULT_BUFFER_SIZE 1048576 // 2^20 (approx 5 sec @ 48k)
 #define N_SCENES 3
 #define N_INPUT_CHANNELS 2 // TODO: nyi - only used for memory check
 
 #define FREEMEM_FAIL_MSG "could not determine available memory - quitting"
 
 // K_NUMPAD0 is defined as 130992 and K_0 is defined as 65712 in CtrlCore/X11Leys.h 
-// on my system the actual keycodes are 130915 NLoff and 48 NLon
+// on my system the actual keycodes for KP0 are 130915 NLoff and 48 NLon
 #define KP0_NLOFF 130915
 #define KP0_NLON 48
 
@@ -50,15 +50,13 @@ class Scene
 		virtual ~Scene() {}
 
 		// audio data
-		jack_default_audio_sample_t* recordBuffer1 ;
-		jack_default_audio_sample_t* recordBuffer2 ;
 		Vector<jack_default_audio_sample_t*> loopBuffers1 ;
 		Vector<jack_default_audio_sample_t*> loopBuffers2 ;
 
 		// buffer iteration
-		unsigned int loopN ;
-		unsigned int frameN ;
 		unsigned int nFrames ;
+		unsigned int frameN ;
+		unsigned int nLoops ;
 
 		// recording state
 		bool isSaveLoop ;
@@ -68,6 +66,7 @@ class Scene
     void setMode() ;
 
 		// query state
+		void reset() ;
     unsigned int getLoopPos() ;
 } ;
 
@@ -77,7 +76,7 @@ class Loopidity
 	public:
 
 		// user actions
-    static int Init() ;
+    static bool Init(unsigned int recordBufferSize) ;
 		static void ToggleScene() ;
     static void SetMode() ;
 
@@ -97,7 +96,6 @@ class Loopidity
 		static unsigned int NextSceneN ;
 
 		// audio data
-		static unsigned int InitBufferSizes[N_SCENES] ;
 		static Vector<Scene*> Scenes ;
 
 		// setup

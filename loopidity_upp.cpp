@@ -8,8 +8,9 @@
 /* private variables */
 
 LoopidityUpp* LoopidityUpp::App = 0 ;
-//Vector<jack_default_audio_sample_t> inPeaks1 , inPeaks2 ; // TODO: make these class memebers
-//Vector<jack_default_audio_sample_t> outPeaks1 , outPeaks2 ; // TODO: make these class memebers
+//Vector<jack_default_audio_sample_t> inPeaks1 , inPeaks2 ; // TODO:
+//Vector<jack_default_audio_sample_t> outPeaks1 , outPeaks2 ; // TODO:
+
 
 /* private constants */
 
@@ -32,6 +33,8 @@ void LoopidityUpp::resetGUI() { setMode() ; }
 
 
 // getters/setters
+
+void LoopidityUpp::tempStatusL(const char* msg) { statusL.Temporary(msg) ; }
 
 void LoopidityUpp::setStatusL(const char* msg) { statusL.Set(msg) ; }
 
@@ -59,11 +62,7 @@ void LoopidityUpp::setMode()
 	// progress bar
 	if (isRecording && !isPulseExist) loopProgress.SetColor(STATUS_COLOR_RECORDING) ;
 	else loopProgress.SetColor(STATUS_COLOR_IDLE) ;
-
-if (DEBUG) { char dbg[256] ; sprintf(dbg , "Set mode: %d %d %d" , isSaveLoop , isRecording , isPulseExist) ; tempStatusR(dbg) ; }
 }
-
-void LoopidityUpp::tempStatusR(const char* msg) { statusR.Temporary(msg) ; }
 
 
 /* private functions */
@@ -77,53 +76,49 @@ void LoopidityUpp::init()
 	AddFrame(status) ; status.Set(" ") ; statusL.Set(" ") ; statusR.Set(" ") ;
 	status.AddFrame(statusL.Left(STATUS_W)) ; status.AddFrame(statusR.Right(STATUS_W)) ;
 
-	// check free memory
-	String out ; SysExec("free" , "" , out) ; int idx = out.Find("Swap:" , 0) ;
-	out.Remove(idx , out.GetLength() - idx) ; out.Remove(0 , out.ReverseFind(' ')) ;
-	unsigned int nFrames = DEFAULT_BUFFER_SIZE * N_INPUT_CHANNELS * N_SCENES ;
-	unsigned int buffersSize = (nFrames * JackIO::GetFrameSize()) / 1000 ;
-	unsigned int availableMemory = atoi(out) ;
-	if (!buffersSize || !availableMemory) { PromptOK(FREEMEM_FAIL_MSG) ; exit(1) ; }
-
-#if DEBUG
-dbgLabel7.SetText("buff / mem") ; char dbg[256] ; sprintf(dbg , "%u / %u" , buffersSize , availableMemory) ; dbgText7 = dbg ;
-Loopidity::SetDbgLabels() ;
-#endif
+if (DEBUG) Loopidity::SetDbgLabels() ;
 
 	// initialize peaks cache
 	for (unsigned int peakN = 0 ; peakN < N_PEAKS ; ++peakN)
 		{ inPeaks.push_back(0.0) ; outPeaks.push_back(0.0) ; }
 
-#if AUTOSTART
 #if MEMORY_CHECK
-	if (buffersSize < availableMemory) startLoopidity() ;
-#if STATIC_BUFFER_SIZE
-	else if (DEBUG) { sprintf(dbg , "DEFAULT_BUFFER_SIZES too large - quitting - %u / %u" , buffersSize , availableMemory) ; PromptOK(dbg) ; exit(1) ; }
+	// check free memory
+	unsigned int nFrames = DEFAULT_BUFFER_SIZE * N_INPUT_CHANNELS * N_SCENES ;
+	unsigned int buffersSize = (nFrames * JackIO::GetFrameSize()) / 1000 ;
+	unsigned int availableMemory = getAvailableMemory() ;
+	if (!availableMemory || !buffersSize) { PromptOK(FREEMEM_FAIL_MSG) ; exit(1) ; }
+
+if (DEBUG) dbgLabel7.SetText("buff / mem") ; char dbg[256] ; sprintf(dbg , "%u / %u" , buffersSize , availableMemory) ; dbgText7 = dbg ;
+
+	if (buffersSize < availableMemory) { if (INIT_LOOPIDITY) startLoopidity(DEFAULT_BUFFER_SIZE) ; }
+#if ! STATIC_BUFFER_SIZE // TODO: eliminate STATIC_BUFFER_SIZE
+	else SetTimeCallback(1000 , THISBACK(openMemoryDialog)) ; // TODO: do we have a 'GUI running' callback?
 #else
-		// TODO: do we have a 'GUI running' callback?
-	else SetTimeCallback(1000 , THISBACK(openMemoryDialog)) ;
+	else { sprintf(dbg , "DEFAULT_BUFFER_SIZE too large - quitting - %u / %u" , buffersSize , availableMemory) ; PromptOK(dbg) ; exit(1) ; }
 #endif
+
 #else
-	startLoopidity() ;
-#endif
+	if (INIT_LOOPIDITY) startLoopidity(DEFAULT_BUFFER_SIZE) ;
 #endif
 }
 
-void LoopidityUpp::startLoopidity()
+void LoopidityUpp::startLoopidity(unsigned int recordBufferSize)
 {
-	if (!Loopidity::Init()) { PromptOK(JACK_FAIL_MSG) ; exit(1) ; }
+	if (!Loopidity::Init(recordBufferSize)) { PromptOK(JACK_FAIL_MSG) ; exit(1) ; }
 
 	InPort1 = JackIO::GetInPort1() ; InPort2 = JackIO::GetInPort2() ;
 	OutPort1 = JackIO::GetOutPort1() ; OutPort2 = JackIO::GetOutPort2() ;
 
-	resetGUI() ; SetTimeCallback(-GUI_UPDATE_INTERVAL , THISBACK(updateGUI)) ;
+	resetGUI() ;
+	SetTimeCallback(-GUI_UPDATE_INTERVAL_SHORT , THISBACK(updateGUIFast)) ;
+	SetTimeCallback(-GUI_UPDATE_INTERVAL_LONG , THISBACK(updateGUISlow)) ;
 }
 
 
 // event handlers
 
 void LoopidityUpp::LeftDown(Point p , dword d) {}
-
 bool LoopidityUpp::Key(dword key , int count)
 {
 	switch(key)
@@ -148,16 +143,41 @@ virtual void RightDown(Point, dword)
 
 void LoopidityUpp::Paint(Draw& w) { drawScopes(w) ; }
 
-void LoopidityUpp::openMemoryDialog() { memDlg.RunAppModal() ; startLoopidity() ; }
+void LoopidityUpp::openMemoryDialog() { memDlg.RunAppModal() ; }
 //memDlg.Open(this) ;
 //memDlg.Open() ;
 //memDlg.Run() ;
 //PromptOK("ok");//exit(0) ;
 
-void LoopidityUpp::updateGUI() { updateLoopProgress() ; updateVUMeters() ; }
+void LoopidityUpp::updateGUIFast() { updateLoopProgress() ; updateVUMeters() ; }
+
+void LoopidityUpp::updateGUISlow() { updateMemory() ; }
 
 
 // helpers
+
+String LoopidityUpp::makeTime(unsigned int seconds)
+{
+	unsigned int  s = seconds % 60 ; unsigned int m = seconds / 60 ;
+	char time[64] ; sprintf(time , "%s%u:%s%u" , (m > 9)? "" : "0" , m , (s > 9)? "" : "0" , s) ;
+	return String(time) ;
+}
+
+unsigned int LoopidityUpp::getAvailableMemory()
+{
+	String out ; SysExec("free" , "" , out) ; int idx = out.Find("Swap:" , 0) ;
+	out.Remove(idx , out.GetLength() - idx) ; out.Remove(0 , out.ReverseFind(' ')) ;
+	return atoi(out) ;
+}
+
+void LoopidityUpp::updateMemory()
+{
+	String scenePos = makeTime(JackIO::GetCurrentScene()->frameN / JackIO::GetSampleRate()) ;
+	String sceneLen = makeTime(JackIO::GetCurrentScene()->nFrames / JackIO::GetSampleRate()) ;
+	String remaining = makeTime(getAvailableMemory() * 1024 / JackIO::GetFrameSize() / JackIO::GetSampleRate()) ;
+char mem[16] ; sprintf(mem , "%ukb" , getAvailableMemory()) ; // TODO: we wont need this
+	setStatusR(scenePos + " / " + sceneLen + " - (" + remaining + " remaining) <" + mem + '>') ;
+}
 
 void LoopidityUpp::drawScopes(Draw& w)
 {
