@@ -24,7 +24,7 @@ class JackIO
 		static jack_port_t* GetInPort2() ;
 		static jack_port_t* GetOutPort1() ;
 		static jack_port_t* GetOutPort2() ;
-		static unsigned int GetNFrames() ;
+		static unsigned int GetNFramesPerPeriod() ;
 		static const unsigned int GetFrameSize() ;
 		static Scene* GetCurrentScene() ;
 		static void SetNextScene(Scene* nextScene) ;
@@ -41,8 +41,8 @@ class JackIO
 		// audio data
 		static Scene* CurrentScene ;
 		static Scene* NextScene ;
-		static jack_default_audio_sample_t* RecordBuffer1 ;
-		static jack_default_audio_sample_t* RecordBuffer2 ;
+		static SAMPLE* RecordBuffer1 ;
+		static SAMPLE* RecordBuffer2 ;
 
 		// server state
 		static unsigned int NFramesPerPeriod ;

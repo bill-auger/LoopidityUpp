@@ -9,8 +9,10 @@ file
 	Loopidity.lay,
 	debug.h,
 	loopidity_upp.h,
-	loopidity_upp.cpp,
 	loopidity.h,
+	scene_upp.cpp,
+	scene_upp.h,
+	loopidity_upp.cpp,
 	loopidity.cpp,
 	jack_io.h,
 	jack_io.cpp;

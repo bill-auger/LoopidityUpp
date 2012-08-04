@@ -1,25 +1,27 @@
 
-#include <SysExec/SysExec.h>
-
 #include "loopidity_upp.h"
-#include "loopidity.h"
 
 
-/* private variables */
+// DEBUG
+bool LoopidityUpp::DbgShow = true ;
+
+
+/* LoopidityUpp class private variables */
 
 LoopidityUpp* LoopidityUpp::App = 0 ;
-//Vector<jack_default_audio_sample_t> inPeaks1 , inPeaks2 ; // TODO:
-//Vector<jack_default_audio_sample_t> outPeaks1 , outPeaks2 ; // TODO:
+SceneUpp* scenes[N_SCENES] = {0} ;
+Vector<SAMPLE>* inPeaks = 0 ;
+Vector<SAMPLE>* outPeaks = 0 ;
+SAMPLE* transientPeaks = 0 ;
 
-
-/* private constants */
+/* LoopidityUpp class private constants */
 
 const Color LoopidityUpp::STATUS_COLOR_RECORDING = Color(255 , 0 , 0) ;
 const Color LoopidityUpp::STATUS_COLOR_PLAYING = Color(191 , 191 , 0) ;
 const Color LoopidityUpp::STATUS_COLOR_IDLE = Color(127 , 127 , 127) ;
 
 
-/* public functions */
+/* LoopidityUpp class public functions */
 
 LoopidityUpp* LoopidityUpp::New()
 {
@@ -64,6 +66,8 @@ void LoopidityUpp::setMode()
 	else loopProgress.SetColor(STATUS_COLOR_IDLE) ;
 }
 
+void LoopidityUpp::alert(String msg) { PromptOK(msg) ; }
+
 
 /* private functions */
 
@@ -72,15 +76,15 @@ void LoopidityUpp::setMode()
 void LoopidityUpp::init()
 {
 	// initialize GUI
-	Title("Loopidity").Sizeable() ; SetRect(0 , 0 , INIT_W , INIT_H) ;
+#if DRAW_WIDGETS
+	Title("Loopidity").Sizeable().SetRect(0 , 0 , INIT_W , INIT_H) ;
+#else
+	Title("Loopidity").Sizeable().Maximize() ;
+#endif
 	AddFrame(status) ; status.Set(" ") ; statusL.Set(" ") ; statusR.Set(" ") ;
 	status.AddFrame(statusL.Left(STATUS_W)) ; status.AddFrame(statusR.Right(STATUS_W)) ;
 
 if (DEBUG) Loopidity::SetDbgLabels() ;
-
-	// initialize peaks cache
-	for (unsigned int peakN = 0 ; peakN < N_PEAKS ; ++peakN)
-		{ inPeaks.push_back(0.0) ; outPeaks.push_back(0.0) ; }
 
 #if MEMORY_CHECK
 	// check free memory
@@ -105,43 +109,122 @@ if (DEBUG) dbgLabel7.SetText("buff / mem") ; char dbg[256] ; sprintf(dbg , "%u /
 
 void LoopidityUpp::startLoopidity(unsigned int recordBufferSize)
 {
-	if (!Loopidity::Init(recordBufferSize)) { PromptOK(JACK_FAIL_MSG) ; exit(1) ; }
+	// initialize Loopidity JackIO and SceneUpp classes
+	Scene** aScenes = Loopidity::Init(recordBufferSize) ;
+	for (unsigned int sceneN = 0 ; sceneN < N_SCENES ; ++sceneN)
+		scenes[sceneN] = new SceneUpp(aScenes[sceneN] , sceneN) ;
 
-	InPort1 = JackIO::GetInPort1() ; InPort2 = JackIO::GetInPort2() ;
-	OutPort1 = JackIO::GetOutPort1() ; OutPort2 = JackIO::GetOutPort2() ;
+	// get handles to scope and VU peaks caches
+	inPeaks = Loopidity::GetInPeaksCache() ; outPeaks = Loopidity::GetOutPeaksCache() ;
+	transientPeaks = Loopidity::GetTransientPeaksCache() ;
 
+#if DRAW_WIDGETS
 	resetGUI() ;
 	SetTimeCallback(-GUI_UPDATE_INTERVAL_SHORT , THISBACK(updateGUIFast)) ;
 	SetTimeCallback(-GUI_UPDATE_INTERVAL_LONG , THISBACK(updateGUISlow)) ;
+#else
+	showHideCtrls() ;
+	SetTimeCallback(-GUI_UPDATE_INTERVAL_SHORT , THISBACK(updateDrawFast)) ;
+#endif
 }
 
 
 // event handlers
 
-void LoopidityUpp::LeftDown(Point p , dword d) {}
+// DEBUG
+void LoopidityUpp::showHideCtrls()
+{
+	DbgShow = !DbgShow ; Ctrl* child = GetFirstChild() ;
+	do child->Show(DbgShow) ; while (child = child->GetNext()) ;
+}
+// DEBUG end
+
 bool LoopidityUpp::Key(dword key , int count)
 {
 	switch(key)
 	{
-case K_RETURN: case K_F5: exit(0) ; break ;
+// DEBUG
+case K_F5: exit(0) ; break ;
+case K_RETURN: showHideCtrls() ; break ;
+// DEBUG end
 
 		case K_SPACE: Loopidity::SetMode() ; break ;
 		case K_NUMPAD0: case KP0_NLON: case KP0_NLOFF: Loopidity::ToggleScene() ; break ;
 		default: return false ; return true ; // TODO: not sure what to return
 	}
 }
-/*
-virtual void RightDown(Point, dword)
+
+//void LoopidityUpp::LeftDown(Point p , dword d) {}
+
+
+// drawing
+bool IsBetterWayToDoThis = false ;
+void LoopidityUpp::Paint(Draw& wd)
 {
-    ProgressInfo f(status); f.Text("Progress:") ;
-    for(int i = 0 ; i < 50 ; i++) { f.Set(i , 50) ; Sleep(20) ; }
+		Rect winRect = GetSize() ;
+
+#if DRAW_BG_FULL
+		wd.DrawRect(winRect , WIN_BG_COLOR) ;
+#endif
+
+#if DRAW_SCENES
+		unsigned int currentSceneN = Loopidity::GetCurrentSceneN() ;
+		SceneUpp* scene = scenes[currentSceneN] ;
+
+#if ! DRAW_BG_FULL
+if (!IsBetterWayToDoThis) { wd.DrawRect(winRect , WIN_BG_COLOR) ; IsBetterWayToDoThis = true ; }
+else wd.DrawRect(scene->sceneX , scene->sceneY , scene->sceneW , scene->sceneH , WIN_BG_COLOR) ;
+#endif
+
+		// draw current scene
+		scene->setDims(winRect , true) ; scene->drawScene(wd) ;
+		for (unsigned int sceneN = 0 ; sceneN < N_SCENES ; ++sceneN)
+		{
+			if (sceneN == currentSceneN) continue ;
+
+			// draw inactive scenes
+			scene = scenes[sceneN] ; scene->setDims(winRect , false) ;
+			Image img = scene->createSceneImgCached(winRect.Width() , winRect.Height()) ;
+			wd.DrawImage(scene->sceneX , scene->sceneY , img) ;
+		}
+#endif
+
+#if DRAW_SCOPES
+	drawScopes(wd , winRect) ;
+#endif
+
+#if DRAW_SCENES && DRAW_DEBUG_TEXT
+char dbg[255] ; scenes[currentSceneN]->getMainDbgText(dbg) ; wd.DrawRect(MAIN_DEBUG_TEXT_POS , winRect.Width() , winRect.Height() , WIN_BG_COLOR) ; wd.DrawText(MAIN_DEBUG_TEXT_POS , dbg , Roman(18) , White) ;
+#endif
 }
-*/
+
+void LoopidityUpp::drawScopes(Draw& d , Rect winRect)
+{
+	unsigned int center = winRect.Width() / 2 ;
+#if ! DRAW_BG_FULL
+	unsigned int scopeL = center - N_PEAKS , scopeT = SCOPE_Y - SCOPE_MAX ; 
+	unsigned int scopeW = N_PEAKS * 2 , scopeH = SCOPE_Y + SCOPE_MAX ;
+	d.DrawRect(scopeL , scopeT , scopeW , scopeH , SCOPE_BG_COLOR) ;
+#endif
+	for (unsigned int peakN = 0 ; peakN < N_PEAKS ; ++peakN)
+	{
+		unsigned int inX = center + N_PEAKS - peakN , outX = center - peakN ;
+		unsigned int inH = (unsigned int)(*inPeaks)[peakN] ; 
+		unsigned int outH = (unsigned int)(*outPeaks)[peakN] ;
+		Color inColor , outColor ;
+		if (inH > SCOPE_MAX) { inH = SCOPE_MAX ; inColor = INSCOPE_HI_COLOR ; }		
+		else if (inH > SCOPE_MAX * SCOPE_OPTIMAL) inColor = INSCOPE_MID_COLOR ;
+		else inColor = INSCOPE_LO_COLOR ;
+		if (outH > SCOPE_MAX) { outH = SCOPE_MAX ; outColor = OUTSCOPE_HI_COLOR ; }
+		else if (outH > SCOPE_MAX * SCOPE_OPTIMAL) outColor = OUTSCOPE_MID_COLOR ;
+		else outColor = OUTSCOPE_LO_COLOR ;
+		d.DrawLine(outX , SCOPE_Y - outH , outX , SCOPE_Y + outH , 1 , outColor) ;
+		d.DrawLine(inX , SCOPE_Y - inH , inX , SCOPE_Y + inH , 1 , inColor) ;
+	}
+}
 
 
 // callbacks
-
-void LoopidityUpp::Paint(Draw& w) { drawScopes(w) ; }
 
 void LoopidityUpp::openMemoryDialog() { memDlg.RunAppModal() ; }
 //memDlg.Open(this) ;
@@ -149,9 +232,13 @@ void LoopidityUpp::openMemoryDialog() { memDlg.RunAppModal() ; }
 //memDlg.Run() ;
 //PromptOK("ok");//exit(0) ;
 
-void LoopidityUpp::updateGUIFast() { updateLoopProgress() ; updateVUMeters() ; }
+#if DRAW_WIDGETS
+void LoopidityUpp::updateGUIFast() { updateLoopProgress() ; updateVUMeters() ; Refresh() ; }
 
 void LoopidityUpp::updateGUISlow() { updateMemory() ; }
+#else
+void LoopidityUpp::updateDrawFast() { Refresh() ; }
+#endif
 
 
 // helpers
@@ -172,57 +259,24 @@ unsigned int LoopidityUpp::getAvailableMemory()
 
 void LoopidityUpp::updateMemory()
 {
-	String scenePos = makeTime(JackIO::GetCurrentScene()->frameN / JackIO::GetSampleRate()) ;
-	String sceneLen = makeTime(JackIO::GetCurrentScene()->nFrames / JackIO::GetSampleRate()) ;
-	String remaining = makeTime(getAvailableMemory() * 1024 / JackIO::GetFrameSize() / JackIO::GetSampleRate()) ;
+	Scene* currentScene = JackIO::GetCurrentScene() ; unsigned int sampleRate = JackIO::GetSampleRate() ;
+	String scenePos = makeTime(currentScene->getFrameN() / sampleRate) ;
+	String sceneLen = makeTime(currentScene->getNFrames() / sampleRate) ;
+	String remaining = makeTime(getAvailableMemory() * 1024 / JackIO::GetFrameSize() / sampleRate) ;
 char mem[16] ; sprintf(mem , "%ukb" , getAvailableMemory()) ; // TODO: we wont need this
 	setStatusR(scenePos + " / " + sceneLen + " - (" + remaining + " remaining) <" + mem + '>') ;
-}
-
-void LoopidityUpp::drawScopes(Draw& w)
-{
-	Rect winRect = GetSize() ; w.DrawRect(winRect , Black()) ;
-	unsigned int center = winRect.Width() / 2 ;
-	for (unsigned int peakN = 0 ; peakN < N_PEAKS ; ++peakN)
-	{
-		unsigned int inX , outX ; inX = center + N_PEAKS - peakN ; outX = center - peakN ;
-		unsigned int inY , outY ; inY = inPeaks[peakN] ; outY = outPeaks[peakN] ;
-		Color inColor , outColor ; inColor = outColor = Green() ;
-		if (inY > SCOPE_MAX * SCOPE_OPTIMAL) inColor = Yellow() ;
-		if (outY > SCOPE_MAX * SCOPE_OPTIMAL) inColor = Yellow() ;
-		if (inY > SCOPE_MAX) { inY = SCOPE_MAX ; inColor = Red() ; }
-		if (outY > SCOPE_MAX) { outY = SCOPE_MAX ; outColor = Red() ; }
-		w.DrawLine(inX , INSCOPE_Y - inY , inX , INSCOPE_Y + inY , 1 , inColor) ;
-		w.DrawLine(outX , OUTSCOPE_Y - outY , outX , OUTSCOPE_Y + outY , 1 , outColor) ;
-	}
 }
 
 void LoopidityUpp::updateLoopProgress() { loopProgress.Set(Loopidity::GetLoopPos() , 1000) ; }
 
 void LoopidityUpp::updateVUMeters()
 {
-	Scene* currentScene = JackIO::GetCurrentScene() ;
-	unsigned int nFrames = JackIO::GetNFrames() ;	
-	unsigned int frameN = (currentScene->frameN)? currentScene->frameN - nFrames : 0 ;
-	jack_default_audio_sample_t* inBuff1 = (jack_default_audio_sample_t*)jack_port_get_buffer(InPort1 , nFrames) ;
-	jack_default_audio_sample_t* inBuff2 = (jack_default_audio_sample_t*)jack_port_get_buffer(InPort2 , nFrames) ;
-	jack_default_audio_sample_t* outBuff1 = (jack_default_audio_sample_t*)jack_port_get_buffer(OutPort1 , nFrames) ;
-	jack_default_audio_sample_t* outBuff2 = (jack_default_audio_sample_t*)jack_port_get_buffer(OutPort2 , nFrames) ;
-	jack_default_audio_sample_t inHi1 , inHi2 ;
-	jack_default_audio_sample_t outHi1 , outHi2 ;
-	inHi1 = inHi2 = outHi1 = outHi2 = 0 ;
-	for (unsigned int frameNin = 0 ; frameNin < nFrames ; ++frameNin)
-	{
-		float in1 = fabs(inBuff1[frameNin]) ; float in2 = fabs(inBuff2[frameNin]) ;
-		float out1 = fabs(outBuff1[frameNin]) ; float out2 = fabs(outBuff2[frameNin]) ;
-		if (in1 > inHi1) inHi1 = in1 ; if (in2 > inHi2) inHi2 = in2 ;
-		if (out1 > outHi1) outHi1 = out1 ; if (out2 > outHi2) outHi2 = out2 ;
-	}
-	inPeaks.Pop() ; inPeaks.Insert(0 , (inHi1 *= SCOPE_SCALE) + (inHi2 *= SCOPE_SCALE)) ;
-	outPeaks.Pop() ; outPeaks.Insert(0 , (outHi1 *= SCOPE_SCALE) + (outHi2 *= SCOPE_SCALE)) ;
-	inputProgress1.Set(inHi1 , VU_SCALE) ; inputProgress2.Set(inHi2 , VU_SCALE) ;
-	outputProgress1.Set(outHi1 , VU_SCALE) ; outputProgress2.Set(outHi2 , VU_SCALE) ;
-Refresh() ;
+	Loopidity::ScanTransientPeaks() ;
+	inputProgress1.Set(transientPeaks[0] , VU_SCALE) ;
+	inputProgress2.Set(transientPeaks[1] , VU_SCALE) ;
+	outputProgress1.Set(transientPeaks[2] , VU_SCALE) ;
+	outputProgress2.Set(transientPeaks[3] , VU_SCALE) ;
+
 Loopidity::Vardump() ;
 }
 

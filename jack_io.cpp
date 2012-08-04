@@ -17,12 +17,12 @@ jack_port_t* JackIO::OutputPort2 = 0 ;
 // audio data
 Scene* JackIO::CurrentScene = 0 ;
 Scene* JackIO::NextScene = 0 ;
-jack_default_audio_sample_t* JackIO::RecordBuffer1 = 0 ;
-jack_default_audio_sample_t* JackIO::RecordBuffer2 = 0 ;
+SAMPLE* JackIO::RecordBuffer1 = 0 ;
+SAMPLE* JackIO::RecordBuffer2 = 0 ;
 
 // server state
 unsigned int JackIO::NFramesPerPeriod = 0 ;
-const unsigned int JackIO::FRAME_SIZE = sizeof(jack_default_audio_sample_t) ;
+const unsigned int JackIO::FRAME_SIZE = sizeof(SAMPLE) ;
 unsigned int JackIO::PeriodSize = 0 ;
 
 // misc flags
@@ -68,8 +68,7 @@ if (! INIT_JACK) return true ;
 	if (jack_activate(Client)) { DBG("cannot activate client") ; return false ; }
 
 	// initialize record buffers
-	RecordBuffer1 = new jack_default_audio_sample_t[nFrames]() ;
-	RecordBuffer2 = new jack_default_audio_sample_t[nFrames]() ;
+	RecordBuffer1 = new SAMPLE[nFrames]() ; RecordBuffer2 = new SAMPLE[nFrames]() ;
 
 	DBG("JACK initialized") ; return true ;
 }
@@ -88,7 +87,7 @@ jack_port_t* JackIO::GetOutPort1() { return OutputPort1 ; }
 
 jack_port_t* JackIO::GetOutPort2() { return OutputPort2 ; }
 
-unsigned int JackIO::GetNFrames() { return NFramesPerPeriod ; }
+unsigned int JackIO::GetNFramesPerPeriod() { return NFramesPerPeriod ; }
 
 const unsigned int JackIO::GetFrameSize() { return FRAME_SIZE ; }
 
@@ -106,10 +105,10 @@ int JackIO::ProcessCallback(jack_nframes_t nFrames , void* arg)
 {
 #if DSP
 	// get JACK buffers
-	jack_default_audio_sample_t* in1 = (jack_default_audio_sample_t*)jack_port_get_buffer(InputPort1 , nFrames) ;
-	jack_default_audio_sample_t* out1 = (jack_default_audio_sample_t*)jack_port_get_buffer(OutputPort1 , nFrames) ;
-	jack_default_audio_sample_t* in2 = (jack_default_audio_sample_t*)jack_port_get_buffer(InputPort2 , nFrames) ;
-	jack_default_audio_sample_t* out2 = (jack_default_audio_sample_t*)jack_port_get_buffer(OutputPort2 , nFrames) ;
+	SAMPLE* in1 = (SAMPLE*)jack_port_get_buffer(InputPort1 , nFrames) ;
+	SAMPLE* out1 = (SAMPLE*)jack_port_get_buffer(OutputPort1 , nFrames) ;
+	SAMPLE* in2 = (SAMPLE*)jack_port_get_buffer(InputPort2 , nFrames) ;
+	SAMPLE* out2 = (SAMPLE*)jack_port_get_buffer(OutputPort2 , nFrames) ;
 #if ! PASSTHRU
 	if (!Loopidity::GetIsRecording()) // TODO: we could avoid this call if all CurrentScene->nFrames were initially 1
 #endif
@@ -119,8 +118,8 @@ int JackIO::ProcessCallback(jack_nframes_t nFrames , void* arg)
 	}
 
 	// index into the record buffers and mix out
-	jack_default_audio_sample_t* currBuff1 = &(RecordBuffer1[CurrentScene->frameN]) ;
-	jack_default_audio_sample_t* currBuff2 = &(RecordBuffer2[CurrentScene->frameN]) ;
+	SAMPLE* currBuff1 = &(RecordBuffer1[CurrentScene->frameN]) ;
+	SAMPLE* currBuff2 = &(RecordBuffer2[CurrentScene->frameN]) ;
 	for (unsigned int frameNin = 0 ; frameNin < nFrames ; ++frameNin)
 	{
 		// write input to mix buffers
@@ -148,8 +147,8 @@ int JackIO::ProcessCallback(jack_nframes_t nFrames , void* arg)
 		if (CurrentScene->isSaveLoop)
 		{
 #if DSP
-			jack_default_audio_sample_t* newBuffer1 = new jack_default_audio_sample_t[CurrentScene->nFrames]() ;
-			jack_default_audio_sample_t* newBuffer2 = new jack_default_audio_sample_t[CurrentScene->nFrames]() ;
+			SAMPLE* newBuffer1 = new SAMPLE[CurrentScene->nFrames]() ;
+			SAMPLE* newBuffer2 = new SAMPLE[CurrentScene->nFrames]() ;
 			unsigned int nBytes = FRAME_SIZE * CurrentScene->nFrames ;
 			memcpy(newBuffer1 , RecordBuffer1 , nBytes) ;
 			memcpy(newBuffer2 , RecordBuffer2 , nBytes) ;
@@ -171,7 +170,10 @@ if (DEBUG) { char dbg[255] ; sprintf(dbg , "NEW LOOP scene:%d loopN:%d" , Loopid
 }
 
 int JackIO::SetBufferSizeCallback(jack_nframes_t nFrames , void* arg)
-	{ PeriodSize = FRAME_SIZE * (NFramesPerPeriod = nFrames) ; }
+{
+	NFramesPerPeriod = nFrames ; PeriodSize = FRAME_SIZE * (nFrames) ;
+	Loopidity::SetNFramesPerPeriod(nFrames) ;
+}
 
 void JackIO::ShutdownCallback(void* arg)
 {
